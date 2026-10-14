@@ -1,0 +1,32 @@
+name: Build Windows
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: python -m playwright install chromium
+      - run: python setup_and_build.py
+      - name: Zip
+        run: Compress-Archive -Path dist\* -DestinationPath URLVideoPlayer-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: URLVideoPlayer-windows
+          path: URLVideoPlayer-windows.zip
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: URLVideoPlayer-windows.zip
+          generate_release_notes: true
