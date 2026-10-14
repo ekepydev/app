@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="utf-8">
+<title>URL Video Player</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="android_shim.js"></script>
+<style>
+  :root {
+    --bg:#0d0e12; --panel:#171920; --panel2:#20232c; --line:#2b303a;
+    --text:#eceef3; --dim:#98a0ae; --accent:#e5484d; --accent2:#ff6a6f; --gold:#f5c518;
+    --ok:#3fb27f; --warn:#e5a94b; --err:#ef6b62; --cw:11.5rem;
+  }
+  * { box-sizing:border-box; }
+  html { font-size:14px; }
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--text);
+    font:1rem/1.4 "Segoe UI",system-ui,-apple-system,sans-serif; }
+  button,input,select { font:inherit; color:inherit; }
+  button { background:var(--panel2); border:1px solid var(--line); border-radius:.45rem;
+    padding:.45rem .85rem; cursor:pointer; }
+  button:hover { border-color:#58606f; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.primary:hover { background:var(--accent2); border-color:var(--accent2); }
+  button.ghost { background:transparent; }
+  input[type=text], input[type=password], select { background:var(--bg); border:1px solid var(--line);
+    border-radius:.45rem; padding:.45rem .65rem; color:inherit; }
+  input[type=text] { width:100%; }
+  input:focus, select:focus { outline:none; border-color:var(--accent); }
+  :focus-visible { outline:3px solid var(--gold); outline-offset:2px; }
+  .hidden { display:none !important; }
+
+  /* ---------- katalog ---------- */
+  #catalog { min-height:100%; }
+  #head { position:sticky; top:0; z-index:10; background:linear-gradient(var(--bg) 70%, rgba(13,14,18,.92));
+    backdrop-filter:blur(8px); padding:.8rem 1.4rem .6rem; border-bottom:1px solid var(--line); }
+  #head .r1 { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+  .logo { font-weight:800; letter-spacing:.04em; color:var(--accent); font-size:1.25rem; margin-right:.4rem; white-space:nowrap; }
+  .tabs { display:flex; gap:.3rem; }
+  .tabs button { background:transparent; border:0; border-bottom:3px solid transparent; border-radius:0;
+    padding:.35rem .7rem; font-weight:600; color:var(--dim); }
+  .tabs button.on { color:var(--text); border-bottom-color:var(--accent); }
+  #head .sp { flex:1; }
+  #search { width:16rem; max-width:100%; }
+  #head .r2 { display:flex; gap:.5rem; align-items:center; margin-top:.6rem; flex-wrap:wrap; }
+  #chips { display:flex; gap:.4rem; overflow-x:auto; flex:1; min-width:12rem; padding:.15rem; scrollbar-width:thin; }
+  .chip { flex:none; border-radius:2rem; padding:.25rem .8rem; background:var(--panel2); font-size:.9rem; }
+  .chip.on { background:var(--text); color:#111; border-color:var(--text); }
+  .chip small { opacity:.6; margin-left:.25rem; }
+  #lists { display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; }
+  .lst { display:inline-flex; align-items:center; gap:.3rem; background:var(--panel2); border-radius:2rem; padding:.1rem .2rem .1rem .7rem; font-size:.85rem; }
+  .lst button { border:0; background:transparent; padding:.05rem .45rem; border-radius:50%; color:var(--dim); }
+  .lst button:hover { color:var(--err); }
+  #info { padding:.6rem 1.4rem 0; color:var(--dim); font-size:.9rem; display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--cw), 1fr)); gap:1.3rem 1rem;
+    padding:1rem 1.4rem 4rem; }
+  .empty { grid-column:1/-1; text-align:center; color:var(--dim); padding:4rem 1rem; }
+  .card { display:block; text-align:left; background:none; border:0; padding:0; border-radius:.55rem; color:inherit; transition:transform .15s; }
+  .card:hover, .card:focus-visible { transform:scale(1.045); }
+  .poster { position:relative; aspect-ratio:2/3; border-radius:.55rem; overflow:hidden; background:var(--panel);
+    box-shadow:0 2px 10px rgba(0,0,0,.4); }
+  .poster img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .ph { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:.8rem; font-weight:700; font-size:1.05rem; line-height:1.2; color:rgba(255,255,255,.85); }
+  .badge { position:absolute; font-size:.75rem; font-weight:700; border-radius:.3rem; padding:.05rem .4rem; }
+  .b-new { top:.4rem; left:.4rem; background:var(--warn); color:#222; }
+  .b-rate { top:.4rem; right:.4rem; background:rgba(0,0,0,.72); color:var(--gold); }
+  .b-done { bottom:.4rem; right:.4rem; background:var(--ok); color:#fff; }
+  .prog { position:absolute; left:0; right:0; bottom:0; height:.3rem; background:rgba(0,0,0,.5); }
+  .prog i { display:block; height:100%; background:var(--accent); }
+  .ct { margin-top:.45rem; font-weight:600; font-size:.95rem; display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden; }
+  .cs { color:var(--dim); font-size:.82rem; }
+  .card.seen .ct { color:var(--dim); }
+
+  /* ---------- detalji ---------- */
+  .modalbox { position:fixed; inset:0; background:rgba(0,0,0,.72); display:none; align-items:center;
+    justify-content:center; z-index:40; padding:1rem; }
+  .modalbox.show { display:flex; }
+  .dlg { background:var(--panel); border:1px solid var(--line); border-radius:.8rem; width:min(46rem,96vw);
+    max-height:92vh; overflow-y:auto; padding:1.2rem 1.4rem; }
+  .dlg h2 { margin:0 0 .8rem; font-size:1.25rem; }
+  .dlg h3 { margin:1.1rem 0 .4rem; font-size:.85rem; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+  .dlg .hint { color:var(--dim); font-size:.88rem; margin:.3rem 0; }
+  .dlg .line { display:flex; gap:.5rem; margin:.4rem 0; align-items:center; flex-wrap:wrap; }
+  .dlg .foot { display:flex; justify-content:flex-end; gap:.5rem; margin-top:1rem; }
+  .dlg .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+  .dlg label.opt { display:flex; align-items:center; gap:.5rem; margin:.35rem 0; cursor:pointer; }
+  #detail .dlg { position:relative; width:min(56rem,96vw); padding:0; overflow:hidden; display:grid; grid-template-columns:17rem 1fr; }
+  #dPoster { position:relative; background:var(--bg); min-height:24rem; }
+  #dPoster img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  #dBody { padding:1.4rem 1.6rem; display:flex; flex-direction:column; gap:.7rem; min-width:0; max-height:92vh; overflow-y:auto; }
+  #dTitle { font-size:1.7rem; font-weight:800; line-height:1.15; margin:0; }
+  #dMeta { color:var(--dim); display:flex; gap:.5rem 1rem; flex-wrap:wrap; align-items:center; }
+  #dMeta .rate { color:var(--gold); font-weight:700; }
+  #dGenres { display:flex; gap:.35rem; flex-wrap:wrap; }
+  #dGenres span { background:var(--panel2); border-radius:2rem; padding:.1rem .65rem; font-size:.85rem; }
+  #dOv { line-height:1.55; color:#d4d8e0; }
+  #dSeasons { display:flex; gap:.4rem; flex-wrap:wrap; }
+  #dSeasons button.cur { background:var(--text); color:#111; border-color:var(--text); }
+  #dSeasons small { opacity:.65; margin-left:.3rem; }
+  #dAct { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:auto; padding-top:.6rem; }
+  #dAct .primary { font-size:1.1rem; padding:.6rem 1.5rem; }
+  #dClose { position:absolute; top:.5rem; right:.5rem; z-index:2; border-radius:50%; width:2.3rem; height:2.3rem; padding:0; background:rgba(0,0,0,.6); }
+  #dFix { background:none; border:0; color:var(--dim); text-decoration:underline; padding:.2rem 0; align-self:flex-start; }
+  .res { padding:.4rem .6rem; background:var(--panel2); border-radius:.45rem; margin:.3rem 0; cursor:pointer;
+    display:flex; gap:.7rem; font-size:.9rem; align-items:center; }
+  .res:hover { outline:1px solid var(--accent); }
+  .res img { width:2.6rem; height:3.9rem; object-fit:cover; border-radius:.25rem; background:var(--bg); flex:none; }
+  .res .rn { flex:1; min-width:0; }
+  .res .rm { color:var(--dim); flex:none; font-size:.82rem; }
+  .res .rt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ---------- player (cijeli prozor, bez okvira) ---------- */
+  #player { position:fixed; inset:0; z-index:30; background:#000; display:none; flex-direction:column; }
+  #player.show { display:flex; }
+  #player.idle { cursor:none; }
+  #stage { flex:1; position:relative; min-height:0; background:#000; }
+  #video,#frame { position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; }
+  #frame { display:none; }
+  video::-webkit-media-controls-fullscreen-button { display:none; }
+  video::cue { background:rgba(0,0,0,.7); color:#fff; font-size:1.25em; }
+  #ptop { position:absolute; top:0; left:0; right:0; z-index:5; padding:.6rem .9rem .9rem;
+    background:linear-gradient(rgba(0,0,0,.85), rgba(0,0,0,0)); transition:opacity .25s; }
+  #player.embed #ptop { position:relative; background:var(--panel); padding:.5rem .9rem; }
+  #player.idle #ptop { opacity:0; pointer-events:none; }
+  #ptop .r1 { display:flex; gap:.5rem; align-items:center; }
+  #ptop .r1 button { background:rgba(30,32,40,.85); }
+  #title { font-size:1.1rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+  #status { font-size:.85rem; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:.1rem 0 0 3rem; }
+  #status.busy { color:var(--warn); } #status.err { color:var(--err); } #status.ok { color:var(--ok); }
+  #blk { color:var(--warn); font-size:.82rem; white-space:nowrap; }
+  #epbar { display:none; gap:.4rem; align-items:center; padding:.5rem 0 0; overflow-x:auto; white-space:nowrap; }
+  #epbar .lbl { color:var(--dim); font-size:.85rem; flex:none; margin-right:.3rem; }
+  #epbar button { min-width:2.4rem; padding:.2rem .6rem; flex:none; background:rgba(30,32,40,.85); }
+  #epbar button.cur { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #epbar button.done:not(.cur) { color:var(--ok); }
+  #overlay { position:absolute; inset:0; display:none; flex-direction:column; align-items:center;
+    justify-content:center; gap:.9rem; background:rgba(0,0,0,.78); text-align:center; padding:1.5rem; z-index:4; }
+  #overlay.show { display:flex; }
+  #overlay .msg { max-width:36rem; }
+  #overlay .btns { display:flex; gap:.5rem; flex-wrap:wrap; justify-content:center; }
+  .spin { width:2.4rem; height:2.4rem; border:3px solid #444; border-top-color:var(--accent);
+    border-radius:50%; animation:sp 1s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  #more { position:absolute; right:.9rem; top:3.6rem; background:var(--panel); border:1px solid var(--line);
+    border-radius:.6rem; padding:.4rem; display:none; flex-direction:column; gap:.3rem; z-index:6; min-width:12rem; }
+  #more.show { display:flex; }
+  #more button { text-align:left; border:0; background:transparent; }
+  #more button:hover { background:var(--panel2); }
+
+  #toast { position:fixed; bottom:2.5rem; left:50%; transform:translateX(-50%); background:var(--panel2);
+    border:1px solid var(--line); padding:.5rem 1.1rem; border-radius:2rem; display:none; z-index:90; max-width:90vw; }
+  .rule { display:flex; gap:.5rem; align-items:center; padding:.4rem .5rem; background:var(--panel2);
+    border-radius:.45rem; margin:.3rem 0; }
+  .rule .k { font-size:.75rem; color:var(--bg); background:var(--accent2); border-radius:.25rem; padding:.05rem .4rem; flex:none; }
+  .rule .p { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; font-size:.85rem; }
+  .cand { padding:.3rem .5rem; font-family:Consolas,monospace; font-size:.85rem; background:var(--panel2);
+    border-radius:.45rem; margin:.25rem 0; cursor:pointer; word-break:break-all; }
+  .cand:hover { outline:1px solid var(--accent); }
+
+  @media (max-width: 760px) {
+    :root { --cw:8.6rem; }
+    #head { padding:.6rem .8rem .5rem; } #grid { padding:.8rem .8rem 4rem; gap:1rem .7rem; } #info { padding:.5rem .8rem 0; }
+    #search { width:100%; flex:1 1 100%; }
+    #detail .dlg { grid-template-columns:1fr; }
+    #dPoster { min-height:0; aspect-ratio:16/10; } #dPoster img { object-position:top; }
+    #dBody { max-height:none; } .dlg .grid2 { grid-template-columns:1fr; }
+    #ptop .r1 button { padding:.35rem .55rem; } #status { margin-left:0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="catalog">
+  <header id="head">
+    <div class="r1">
+      <span class="logo">URL VIDEO</span>
+      <div class="tabs"><button id="tabMovies" class="on">Filmovi</button><button id="tabSeries">Serije</button></div>
+      <span class="sp"></span>
+      <input type="text" id="search" placeholder="Pretraga…">
+      <button id="btnLoad" title="Dodaj još jednu txt listu (npr. filmove i serije zajedno)">Dodaj listu…</button>
+      <button id="btnRefresh" title="Ponovo pročitaj txt fajl">Osvježi</button>
+      <button id="btnSettings">Postavke</button>
+    </div>
+    <div class="r2">
+      <div id="chips"></div>
+      <select id="selWatch"><option value="all">Sve</option><option value="unwatched">Nepogledano</option><option value="watched">Pogledano</option></select>
+      <select id="selSort"><option value="list">Redoslijed liste</option><option value="name">Naziv A–Z</option><option value="rating">Ocjena</option><option value="year">Godina (najnovije)</option></select>
+    </div>
+  </header>
+  <div id="info"><span id="lists">Nema liste</span><span id="count"></span></div>
+  <main id="grid"></main>
+  <div id="sentinel" style="height:1px"></div>
+</div>
+
+<!-- detalji filma/serije -->
+<div id="detail" class="modalbox">
+  <div class="dlg">
+    <button id="dClose" title="Zatvori">✕</button>
+    <div id="dPoster"><div class="ph" id="dPh"></div></div>
+    <div id="dBody">
+      <h1 id="dTitle"></h1>
+      <div id="dMeta"></div>
+      <div id="dGenres"></div>
+      <div id="dOv"></div>
+      <div id="dSeasons"></div>
+      <button id="dFix">Pogrešan naslov ili poster? Ispravi…</button>
+      <div id="dAct"><button id="dPlay" class="primary">▶ Gledaj</button><button id="dMark">Označi kao pogledano</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- player: cijeli prozor -->
+<section id="player">
+  <div id="ptop">
+    <div class="r1">
+      <button id="pBack" title="Nazad (Esc)">←</button>
+      <div id="title"></div>
+      <span id="blk"></span>
+      <button id="btnPrev" title="Prethodni (P)">⏮</button>
+      <button id="btnNext" title="Sljedeći (N)">⏭</button>
+      <button id="btnRetry" title="Ponovo otvori stranicu i uzmi svjež link">↻</button>
+      <button id="btnSubs" title="Titlovi">CC</button>
+      <button id="btnMore" title="Više">⋯</button>
+      <button id="btnFs" title="Full screen (F)">⛶</button>
+    </div>
+    <div id="status">Spremno.</div>
+    <div id="epbar"></div>
+    <div id="more">
+      <button id="btnCopy">Kopiraj link</button>
+      <button id="btnExt">Otvori u browseru</button>
+      <button id="btnPSettings">Postavke…</button>
+    </div>
+  </div>
+  <div id="stage">
+    <video id="video" controls></video>
+    <iframe id="frame" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
+    <div id="overlay"><div class="spin" id="spin"></div><div class="msg" id="ovMsg"></div><div class="btns" id="ovBtns"></div></div>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<!-- postavke -->
+<div id="setModal" class="modalbox">
+  <div class="dlg">
+    <h2>Postavke</h2>
+    <h3>Reprodukcija</h3>
+    <label class="opt"><input type="checkbox" id="optAuto"> Automatski sljedeći</label>
+    <label class="opt"><input type="checkbox" id="optSkip"> Preskoči pogledane</label>
+    <label class="opt"><input type="checkbox" id="optAd"> Blokiraj reklame</label>
+    <label class="opt" title="Pokušaj izvući pravi stream iz stranice playera (omogućava titlove i blokator; sporije)"><input type="checkbox" id="optExt"> Izvuci stream (titlovi)</label>
+    <label class="opt"><input type="checkbox" id="optShow"> Prikaži browser pri traženju linka</label>
+    <label class="opt">Auto titl:
+      <select id="optAutoSub"><option value="off">isključeno</option><option value="online">online (OpenSubtitles)</option></select></label>
+    <div class="line"><button id="btnRules">Pravila za link…</button></div>
+
+    <h3>Postere, žanrove i opise daje TMDB</h3>
+    <div class="hint">Besplatan ključ: themoviedb.org → Settings → API (ključ „API Key“ ili „API Read Access Token“).
+      IMDb nema javni API, a TMDB koristi iste naslove.</div>
+    <div class="grid2">
+      <input type="text" id="tmdbKey" placeholder="TMDB API ključ">
+      <input type="text" id="tmdbLang" placeholder="Jezik opisa (hr-HR, bs-BA, sr-RS, en-US)">
+    </div>
+    <div class="line"><button id="tmdbSave" class="primary">Spremi i provjeri</button><span class="hint" id="metaStat"></span></div>
+    <div class="foot"><button id="setClose">Zatvori</button></div>
+  </div>
+</div>
+
+<!-- ispravka naslova -->
+<div id="fixModal" class="modalbox">
+  <div class="dlg">
+    <h2>Ispravi naslov</h2>
+    <div class="hint">Upiši pravi naslov i izaberi odgovarajući rezultat sa TMDB-a.</div>
+    <div class="line"><input type="text" id="fixInput" placeholder="Naslov"><button id="fixGo" class="primary">Traži</button></div>
+    <div id="fixRes"></div>
+    <div class="foot"><button id="fixClose">Zatvori</button></div>
+  </div>
+</div>
+
+<div id="subModal" class="modalbox">
+  <div class="dlg">
+    <h2>Titlovi</h2>
+    <div class="hint" id="subCur">Titl se prikazuje u playeru (ne radi u ugrađenom okviru).</div>
+
+    <h3>Izvor</h3>
+    <div class="line"><button id="subFileBtn">Učitaj iz fajla (.srt / .vtt)…</button><input type="file" id="subFile" accept=".srt,.vtt,.txt,.sub" style="display:none">
+      <button id="subSearch" class="primary">Traži online (OpenSubtitles)</button></div>
+    <div class="hint">Titl možeš i prevući mišem na video.</div>
+    <div id="subResults"></div>
+
+    <h3>Pomak titla</h3>
+    <div class="line"><button id="offMinus">−0,5 s</button><button id="offPlus">+0,5 s</button>
+      <span id="offLabel" class="hint">0,0 s</span><span style="flex:1"></span><button id="subClear">Ukloni titl</button></div>
+
+    <h3>Postavke</h3>
+    <div class="grid2">
+      <input type="text" id="osKey" placeholder="OpenSubtitles API ključ">
+      <input type="text" id="subLangs" placeholder="Jezici za pretragu (hr,bs,sr,en)">
+      <input type="text" id="osUser" placeholder="OpenSubtitles korisnik (za preuzimanje)">
+      <input type="text" id="osPass" placeholder="OpenSubtitles lozinka">
+    </div>
+    <div class="foot"><button id="subSave">Spremi postavke</button><button id="subClose">Zatvori</button></div>
+  </div>
+</div>
+
+<div id="modal" class="modalbox">
+  <div class="dlg">
+    <h2>Pravila za link videa</h2>
+    <p class="hint">Program prihvata samo link koji odgovara nekom od pravila. Bez pravila hvata bilo koji video link.</p>
+
+    <h3>Novo pravilo</h3>
+    <div class="line"><input type="text" id="ruleInput" placeholder="Zalijepi primjer linka (token može ostati) ili upiši domenu, npr. youtube"></div>
+    <div class="line"><input type="text" id="rulePattern" placeholder="Izvedeni uzorak (možeš ga ručno urediti, * = bilo šta)"><button id="ruleAdd" class="primary">Dodaj</button></div>
+    <div class="hint" id="ruleKind"></div>
+
+    <h3>Aktivna pravila</h3>
+    <div id="ruleList"></div>
+
+    <h3>Linkovi koje je program vidio, a ne odgovaraju pravilima</h3>
+    <div class="hint">Dvoklik na link ga ubacuje kao primjer.</div>
+    <div id="candList"></div>
+
+    <h3>Dodatne reklamne domene za blokiranje (dio imena, odvojeno sa ;)</h3>
+    <div class="line"><input type="text" id="adInput" placeholder="npr. adsterra ; neki-oglasi.com"><button id="adSave">Spremi</button></div>
+    <div class="hint">Ugrađena lista već pokriva većinu poznatih reklamnih mreža. Ako se pravi stream ne uhvati pa se stranica playera prikaže u okviru, reklame u njemu se ne mogu blokirati.</div>
+
+    <h3>Dodatni selektori play dugmeta (odvojeni sa ;)</h3>
+    <div class="line"><input type="text" id="selInput" placeholder="npr. #moj-play ; .big-btn"><button id="selSave">Spremi</button></div>
+    <div class="hint" style="margin-top:.7rem">Čekanje prije klika na play (sekundi). Povećaj ako server često vrati grešku ili 404 jer se player nije stigao učitati.</div>
+    <div class="line"><input type="text" id="delayInput" placeholder="6"><button id="delaySave">Spremi</button></div>
+
+    <div class="foot"><button id="modalClose">Zatvori</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (s) => document.querySelector(s);
+  let api = null;
+  let state = { version: -1, items: [], options: {}, last: "", list_name: "" };
+
+  // ---- katalog ----
+  let metaMap = {}, metaVer = 0, posterBase = "https://image.tmdb.org/t/p/w342", genreNames = {}, hasKey = false;
+  let entries = [], entryByKey = new Map(), urlEntry = new Map(), shown = [], renderedN = 0;
+  const CHUNK = 60;
+  const ui = { tab: "movies", genre: 0, watch: "all", sort: "list", q: "" };
+  let catalogDirty = false;
+
+  // ---- player ----
+  let curEp = 0;           // broj epizode (0 = film)
+  let cur = null;          // URL stranice koja se trenutno pušta
+  let curKey = null;       // ključ unosa (film ili serija) iz kataloga
+  let playlist = [];       // ključevi unosa u redoslijedu kataloga u trenutku puštanja
+  let curRes = null;
+  let token = 0;
+  let retriedFor = null;
+  let hls = null;
+  let watchedMarked = false;
+  let fsOn = false;
+  const video = $("#video"), frame = $("#frame");
+
+  // ---------------- pomoćne ----------------
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg; t.style.display = "block";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => (t.style.display = "none"), 3500);
+  }
+  function setStatus(msg, cls) { const s = $("#status"); s.textContent = msg; s.className = cls || ""; }
+  function showOverlay(msg, spin, buttons) {
+    $("#ovMsg").textContent = msg;
+    $("#spin").style.display = spin ? "block" : "none";
+    const b = $("#ovBtns"); b.replaceChildren();
+    (buttons || []).forEach(([label, fn, primary]) => {
+      const el = document.createElement("button");
+      el.textContent = label; if (primary) el.className = "primary";
+      el.onclick = fn; b.appendChild(el);
+    });
+    $("#overlay").classList.add("show");
+    if (buttons && buttons.length) { showBar(); const f = b.querySelector("button"); if (f) f.focus(); }
+  }
+  function hideOverlay() { $("#overlay").classList.remove("show"); }
+  function itemOf(url) { return state.items.find((i) => i.url === url); }
+  function hue(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; }
+  function esc(s) { return String(s == null ? "" : s); }
+  function posterUrl(m) { return m && m.p ? posterBase + m.p : ""; }
+
+  async function setFs(on) {
+    fsOn = on;
+    try {
+      if (window.AndroidBridge && window.AndroidBridge.setFullscreen) window.AndroidBridge.setFullscreen(on);
+      else if (api && api.set_fullscreen) fsOn = !!(await api.set_fullscreen(on));
+      else if (on) { if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen(); }
+      else if (document.fullscreenElement) await document.exitFullscreen();
+    } catch (e) {}
+    $("#btnFs").textContent = fsOn ? "⤢" : "⛶";
+  }
+
+  // ---------------- unosi kataloga ----------------
+  function buildEntries() {
+    const groups = new Map(), out = [];
+    urlEntry = new Map();
+    state.items.forEach((it) => {
+      if (it.series) {
+        let g = groups.get(it.mk);
+        if (!g) { g = { key: it.mk, series: true, mk: it.mk, items: [] }; groups.set(it.mk, g); out.push(g); }
+        g.items.push(it);
+      } else out.push({ key: it.url, series: false, mk: it.mk, items: [it] });
+    });
+    out.forEach((e) => {
+      if (e.series) e.items.sort((a, b) => (a.season || 0) - (b.season || 0));
+      e.base = e.items[0].base || e.items[0].name;
+      e.isNew = e.items.some((i) => i.new);
+      e.lc = (e.base + " " + e.items.map((i) => i.name + " " + i.url).join(" ")).toLowerCase();
+      e.items.forEach((i) => urlEntry.set(i.url, e));
+    });
+    entries = out;
+    entryByKey = new Map(out.map((e) => [e.key, e]));
+  }
+  const metaOf = (e) => metaMap[e.mk];
+  const titleOf = (e) => { const m = metaOf(e); return (m && m.t) || e.base; };
+  const watchedOf = (e) => e.items.every((i) => i.watched);
+  function progressOf(e) {
+    if (!e.series) return e.items[0].watched ? 1 : 0;
+    let d = 0, t = 0;
+    e.items.forEach((i) => { d += i.watched && !i.eps ? 1 : (i.done || []).length; t += i.eps || (i.watched ? 1 : 0); });
+    return t ? Math.min(1, d / t) : 0;
+  }
+
+  function applyFilters(keep) {
+    const q = ui.q.trim().toLowerCase();
+    let list = entries.filter((e) => e.series === (ui.tab === "series"));
+    if (q) list = list.filter((e) => e.lc.includes(q) || titleOf(e).toLowerCase().includes(q));
+    if (ui.genre) list = list.filter((e) => { const m = metaOf(e); return m && m.g && m.g.includes(ui.genre); });
+    if (ui.watch === "unwatched") list = list.filter((e) => !watchedOf(e));
+    else if (ui.watch === "watched") list = list.filter(watchedOf);
+    if (ui.sort === "name") list.sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
+    else if (ui.sort === "rating") list.sort((a, b) => ((metaOf(b) || {}).r || 0) - ((metaOf(a) || {}).r || 0));
+    else if (ui.sort === "year") list.sort((a, b) => ((metaOf(b) || {}).y || 0) - ((metaOf(a) || {}).y || 0));
+    shown = list;
+    $("#count").textContent = list.length + (list.length === entries.filter((e) => e.series === (ui.tab === "series")).length ? "" : " rezultata");
+    const n = Math.max(CHUNK, keep ? renderedN : 0);
+    $("#grid").replaceChildren(); renderedN = 0;
+    if (!list.length) {
+      const e = document.createElement("div"); e.className = "empty";
+      e.textContent = !state.items.length
+        ? (state.list_name ? "Lista je prazna (nema http/https linkova)." : "Klikni „Dodaj listu…“ i odaberi txt fajl sa linkovima (jedan po liniji). Možeš dodati i listu filmova i listu serija.")
+        : "Nema rezultata.";
+      $("#grid").appendChild(e); return;
+    }
+    renderMore(n);
+  }
+
+  function makeCard(e) {
+    const m = metaOf(e), title = titleOf(e);
+    const el = document.createElement("button");
+    el.type = "button"; el.className = "card" + (watchedOf(e) ? " seen" : ""); el.dataset.key = e.key;
+    const p = document.createElement("div"); p.className = "poster";
+    const ph = document.createElement("div"); ph.className = "ph"; ph.textContent = title;
+    ph.style.background = "linear-gradient(160deg,hsl(" + hue(e.mk) + " 38% 26%),hsl(" + ((hue(e.mk) + 40) % 360) + " 38% 12%))";
+    p.appendChild(ph);
+    const u = posterUrl(m);
+    if (u) {
+      const img = document.createElement("img"); img.loading = "lazy"; img.alt = ""; img.src = u;
+      img.onerror = () => img.remove(); p.appendChild(img);
+    }
+    const addB = (cls, txt) => { const b = document.createElement("span"); b.className = "badge " + cls; b.textContent = txt; p.appendChild(b); };
+    if (e.isNew) addB("b-new", "Novo");
+    if (m && m.r) addB("b-rate", "★ " + m.r.toFixed(1));
+    if (watchedOf(e)) addB("b-done", "✓");
+    const pr = progressOf(e);
+    if (pr > 0 && pr < 1) { const b = document.createElement("div"); b.className = "prog"; const i = document.createElement("i"); i.style.width = Math.round(pr * 100) + "%"; b.appendChild(i); p.appendChild(b); }
+    const ct = document.createElement("div"); ct.className = "ct"; ct.textContent = title;
+    const cs = document.createElement("div"); cs.className = "cs";
+    cs.textContent = e.series ? e.items.length + (e.items.length === 1 ? " sezona" : " sezone") + (m && m.y ? " · " + m.y : "")
+      : (m && m.y) || e.items[0].year || "";
+    el.append(p, ct, cs);
+    el.onclick = () => openDetail(e);
+    return el;
+  }
+
+  let wantTimer = null, wantQueue = new Set();
+  function wantMeta(list) {
+    list.forEach((e) => { if (!metaMap[e.mk]) wantQueue.add(e.mk); });
+    clearTimeout(wantTimer);
+    wantTimer = setTimeout(() => {
+      if (!wantQueue.size || !api || !api.meta_want) return;
+      const arr = [...wantQueue]; wantQueue.clear();
+      api.meta_want(arr).catch(() => {});
+    }, 250);
+  }
+  function renderMore(n) {
+    if (renderedN >= shown.length) return;
+    const end = Math.min(shown.length, renderedN + (n || CHUNK));
+    const frag = document.createDocumentFragment();
+    const batch = shown.slice(renderedN, end);
+    batch.forEach((e) => frag.appendChild(makeCard(e)));
+    $("#grid").appendChild(frag);
+    renderedN = end;
+    wantMeta(batch);
+  }
+  new IntersectionObserver((es) => { if (es[0].isIntersecting && $("#catalog").style.display !== "none") renderMore(); },
+    { rootMargin: "800px" }).observe($("#sentinel"));
+
+  function buildChips() {
+    const counts = {};
+    entries.forEach((e) => {
+      if (e.series !== (ui.tab === "series")) return;
+      const m = metaOf(e);
+      if (m && m.g) m.g.forEach((g) => (counts[g] = (counts[g] || 0) + 1));
+    });
+    const box = $("#chips"); box.replaceChildren();
+    const mk = (id, label, cnt) => {
+      const b = document.createElement("button"); b.className = "chip" + (ui.genre === id ? " on" : "");
+      b.textContent = label; if (cnt != null) { const s = document.createElement("small"); s.textContent = cnt; b.appendChild(s); }
+      b.onclick = () => { ui.genre = id; buildChips(); applyFilters(); };
+      box.appendChild(b);
+    };
+    mk(0, "Svi žanrovi");
+    Object.keys(counts).map(Number).sort((a, b) => counts[b] - counts[a]).forEach((g) => mk(g, genreNames[g] || g, counts[g]));
+  }
+
+  function renderLists(st) {
+    const box = $("#lists"); box.replaceChildren();
+    const ls = st.lists || (st.list_name ? [{ path: "", name: st.list_name }] : []);
+    if (!ls.length) { box.textContent = "Nema liste"; return; }
+    ls.forEach((l) => {
+      const c = document.createElement("span"); c.className = "lst"; c.title = l.path || l.name;
+      c.appendChild(document.createTextNode(l.name));
+      if (l.path && api && api.remove_list) {
+        const x = document.createElement("button"); x.textContent = "✕"; x.title = "Ukloni ovu listu iz kataloga";
+        x.onclick = async () => { applyState(await api.remove_list(l.path)); };
+        c.appendChild(x);
+      }
+      box.appendChild(c);
+    });
+  }
+
+  function applyState(st) {
+    const first = state.version === -1;
+    state = st;
+    renderLists(st);
+    $("#optAuto").checked = !!st.options.autoplay;
+    $("#optSkip").checked = !!st.options.skip_watched;
+    $("#optShow").checked = !!st.options.show_browser;
+    $("#optAd").checked = !!st.options.adblock;
+    $("#optExt").checked = !!st.options.extract_stream;
+    buildEntries();
+    if ($("#player").classList.contains("show")) { catalogDirty = true; renderEpisodes(); refreshTitle(); }
+    else { buildChips(); applyFilters(!first); }
+    if ($("#detail").classList.contains("show") && detEntry) { detEntry = entryByKey.get(detEntry.key) || detEntry; renderDetailDynamic(); }
+    if (st.message) toast(st.message);
+  }
+
+  // ---------------- detalji ----------------
+  let detEntry = null, detItem = null;
+  function pickSeason(e) {
+    if (!e.series) return e.items[0];
+    const last = e.items.find((i) => i.url === state.last);
+    if (last) return last;
+    return e.items.find((i) => !i.watched) || e.items[0];
+  }
+  function resumeLabel(it) {
+    if (!it.series) return it.watched ? "▶ Gledaj ponovo" : "▶ Gledaj";
+    const s = it.season ? "S" + it.season + " " : "";
+    const prog = (it.done && it.done.length) || it.ep > 1 || state.last === it.url;
+    return prog ? "▶ Nastavi · " + s + "E" + it.ep : "▶ Gledaj · " + s + "E1";
+  }
+  function openDetail(e) {
+    detEntry = e; detItem = pickSeason(e);
+    $("#detail").classList.add("show");
+    $("#dOv").textContent = hasKey ? "Učitavam opis…" : "Za postere i opise upiši TMDB ključ u Postavkama.";
+    renderDetailStatic();
+    renderDetailDynamic();
+    $("#dPlay").focus();
+    if (api && api.meta_detail && metaMap[e.mk]) {
+      const key = e.key;
+      api.meta_detail(e.mk).then((d) => {
+        if (!detEntry || detEntry.key !== key) return;
+        $("#dOv").textContent = (d && d.o) || "Nema opisa.";
+      }).catch(() => { $("#dOv").textContent = "Nema opisa."; });
+    } else if (hasKey) {
+      $("#dOv").textContent = "Podaci o ovom naslovu još nisu preuzeti (ili naslov nije nađen na TMDB-u). Probaj „Ispravi…“.";
+    }
+  }
+  function closeDetail() { $("#detail").classList.remove("show"); detEntry = null; }
+  function renderDetailStatic() {
+    const e = detEntry, m = metaOf(e);
+    $("#dTitle").textContent = titleOf(e);
+    $("#dPh").textContent = titleOf(e);
+    $("#dPh").style.background = "linear-gradient(160deg,hsl(" + hue(e.mk) + " 38% 26%),hsl(" + ((hue(e.mk) + 40) % 360) + " 38% 12%))";
+    const old = $("#dPoster img"); if (old) old.remove();
+    const u = posterUrl(m);
+    if (u) { const img = document.createElement("img"); img.alt = ""; img.src = u; img.onerror = () => img.remove(); $("#dPoster").appendChild(img); }
+    const meta = $("#dMeta"); meta.replaceChildren();
+    const add = (t, cls) => { const s = document.createElement("span"); s.textContent = t; if (cls) s.className = cls; meta.appendChild(s); };
+    if (m && m.y) add(String(m.y));
+    if (m && m.r) add("★ " + m.r.toFixed(1) + " / 10", "rate");
+    add(e.series ? "Serija" : "Film");
+    const g = $("#dGenres"); g.replaceChildren();
+    ((m && m.g) || []).forEach((id) => { const s = document.createElement("span"); s.textContent = genreNames[id] || id; g.appendChild(s); });
+    const se = $("#dSeasons"); se.replaceChildren();
+    if (e.series) {
+      e.items.forEach((it) => {
+        const b = document.createElement("button"); b.className = it === detItem || it.url === (detItem && detItem.url) ? "cur" : "";
+        b.textContent = it.season ? "Sezona " + it.season : "Sezona";
+        const done = (it.done || []).length;
+        if (it.eps) { const s = document.createElement("small"); s.textContent = done + "/" + it.eps; b.appendChild(s); }
+        else if (it.watched) { const s = document.createElement("small"); s.textContent = "✓"; b.appendChild(s); }
+        b.onclick = () => { detItem = it; renderDetailStatic(); renderDetailDynamic(); b.focus(); };
+        se.appendChild(b);
+      });
+    }
+    $("#dSeasons").style.display = e.series ? "flex" : "none";
+  }
+  function renderDetailDynamic() {
+    if (!detEntry) return;
+    detItem = detEntry.items.find((i) => detItem && i.url === detItem.url) || pickSeason(detEntry);
+    $("#dPlay").textContent = resumeLabel(detItem);
+    $("#dMark").textContent = detItem.watched ? "Označi kao nepogledano" : "Označi kao pogledano";
+  }
+  $("#dClose").onclick = closeDetail;
+  $("#detail").onclick = (e) => { if (e.target.id === "detail") closeDetail(); };
+  $("#dPlay").onclick = () => { const e = detEntry, it = detItem; closeDetail(); startPlay(it.url, e.key); };
+  $("#dMark").onclick = async () => {
+    const it = detItem; if (!it) return;
+    if (it.watched) { it.watched = false; it.done = []; await api.mark_unwatched(it.url, 0); }
+    else { it.watched = true; await api.mark_watched(it.url, 0); }
+    renderDetailStatic(); renderDetailDynamic(); catalogDirty = true; applyFilters(true);
+  };
+
+  // ---------------- ispravka naslova ----------------
+  $("#dFix").onclick = () => {
+    if (!hasKey) { toast("Prvo upiši TMDB ključ u Postavkama."); return; }
+    $("#fixInput").value = detEntry ? titleOf(detEntry) : "";
+    $("#fixRes").replaceChildren();
+    $("#fixModal").classList.add("show"); $("#fixInput").focus();
+  };
+  $("#fixClose").onclick = () => $("#fixModal").classList.remove("show");
+  async function fixSearch() {
+    const e = detEntry; if (!e) return;
+    const box = $("#fixRes"); box.textContent = "Tražim…";
+    let r; try { r = await api.meta_search($("#fixInput").value, e.series); } catch (err) { r = { ok: false, error: String(err) }; }
+    box.replaceChildren();
+    if (!r.ok) { const d = document.createElement("div"); d.className = "hint"; d.textContent = r.error; box.appendChild(d); return; }
+    if (!r.results.length) { const d = document.createElement("div"); d.className = "hint"; d.textContent = "Nema rezultata."; box.appendChild(d); }
+    r.results.forEach((x) => {
+      const d = document.createElement("div"); d.className = "res";
+      if (x.p) { const im = document.createElement("img"); im.src = posterBase + x.p; im.alt = ""; d.appendChild(im); }
+      const n = document.createElement("div"); n.className = "rn";
+      const t = document.createElement("div"); t.className = "rt"; t.textContent = x.t + (x.y ? " (" + x.y + ")" : "");
+      const o = document.createElement("div"); o.className = "hint"; o.textContent = x.o || "";
+      n.append(t, o);
+      const rm = document.createElement("span"); rm.className = "rm"; rm.textContent = x.r ? "★ " + x.r.toFixed(1) : "";
+      d.append(n, rm);
+      d.onclick = async () => {
+        let p; try { p = await api.meta_pick(e.mk, x.i, e.series); } catch (err) { p = { ok: false, error: String(err) }; }
+        if (!p.ok) { toast(p.error || "Greška"); return; }
+        metaMap[e.mk] = p.meta;
+        $("#fixModal").classList.remove("show");
+        renderDetailStatic(); renderDetailDynamic(); $("#dOv").textContent = p.meta.o || "Nema opisa.";
+        buildChips(); applyFilters(true); toast("Naslov ispravljen");
+      };
+      box.appendChild(d);
+    });
+  }
+  $("#fixGo").onclick = fixSearch;
+  $("#fixInput").onkeydown = (e) => { if (e.key === "Enter") fixSearch(); };
+
+  // ---------------- puštanje ----------------
+  function showPlayer() {
+    $("#player").classList.add("show");
+    $("#catalog").style.display = "none";
+    showBar();
+  }
+  async function closePlayer() {
+    token++;
+    stopPlayback();
+    $("#player").classList.remove("show", "embed", "idle");
+    $("#more").classList.remove("show");
+    $("#catalog").style.display = "";
+    if (fsOn) await setFs(false);
+    const e = curKey && entryByKey.get(curKey);
+    cur = null; curRes = null;
+    if (catalogDirty) { catalogDirty = false; buildChips(); applyFilters(true); }
+    if (e) { const it = detItem; openDetail(e); if (it && it.url !== state.last) {} const el = document.querySelector('.card[data-key="' + CSS.escape(e.key) + '"]'); if (el) el.scrollIntoView({ block: "center" }); }
+  }
+  $("#pBack").onclick = closePlayer;
+
+  function stopPlayback() {
+    if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
+    try { video.pause(); } catch (e) {}
+    video.removeAttribute("src"); video.load();
+    frame.src = "about:blank"; frame.style.display = "none"; video.style.display = "block";
+  }
+  function refreshTitle() {
+    const it = cur && itemOf(cur);
+    if (!it) return;
+    const e = urlEntry.get(cur);
+    const name = e ? titleOf(e) : it.name;
+    const s = it.series ? (it.season ? " — Sezona " + it.season : "") + (curEp ? ", epizoda " + curEp : "") : "";
+    $("#title").textContent = name + s;
+  }
+  function subKey() { return cur ? cur + (curEp ? "#e" + curEp : "") : null; }
+  function renderEpisodes() {
+    const bar = $("#epbar"), it = cur && itemOf(cur);
+    if (!it || !it.series) { bar.style.display = "none"; bar.replaceChildren(); return; }
+    const done = new Set(it.done || []), total = Math.max(it.eps || 0, curEp);
+    const lbl = document.createElement("span"); lbl.className = "lbl";
+    lbl.textContent = "Epizode" + (it.eps ? " (" + done.size + "/" + it.eps + "):" : ":");
+    bar.replaceChildren(lbl);
+    for (let n = 1; n <= total; n++) {
+      const b = document.createElement("button");
+      b.textContent = n; b.title = "Epizoda " + n;
+      b.className = (n === curEp ? "cur " : "") + (done.has(n) ? "done" : "");
+      b.onclick = () => { if (n !== curEp) play(cur, false, n); };
+      bar.appendChild(b);
+    }
+    bar.style.display = "flex";
+    const c = bar.querySelector("button.cur"); if (c) c.scrollIntoView({ inline: "center", block: "nearest" });
+  }
+
+  function startPlay(url, key) {
+    curKey = key;
+    playlist = shown.map((e) => e.key);
+    if (!playlist.includes(key)) playlist = [key];
+    showPlayer();
+    play(url);
+  }
+  function itemsOfCur() { const e = curKey && entryByKey.get(curKey); return e ? e.items : []; }
+  function skipping(it) { return state.options.skip_watched && it.watched; }
+  function goNext(auto) {
+    const it = cur && itemOf(cur);
+    if (it && it.series && curEp && it.eps && curEp < it.eps) { play(cur, false, curEp + 1); return; }
+    const items = itemsOfCur();
+    const i = items.findIndex((x) => x.url === cur);
+    for (let k = i + 1; k < items.length && i >= 0; k++) if (!skipping(items[k])) { play(items[k].url); return; }
+    const pi = playlist.indexOf(curKey);
+    for (let k = pi + 1; k < playlist.length; k++) {
+      const ne = entryByKey.get(playlist[k]);
+      if (!ne || (state.options.skip_watched && watchedOf(ne))) continue;
+      curKey = ne.key; play(pickSeason(ne).url); return;
+    }
+    setStatus(auto ? "Kraj liste." : "Nema sljedećeg videa.", "");
+    if (!auto) toast("Nema sljedećeg videa");
+  }
+  function goPrev() {
+    const it = cur && itemOf(cur);
+    if (it && it.series && curEp > 1) { play(cur, false, curEp - 1); return; }
+    const items = itemsOfCur();
+    const i = items.findIndex((x) => x.url === cur);
+    if (i > 0) { play(items[i - 1].url); return; }
+    const pi = playlist.indexOf(curKey);
+    for (let k = pi - 1; k >= 0; k--) {
+      const pe = entryByKey.get(playlist[k]);
+      if (pe) { curKey = pe.key; play(pickSeason(pe).url); return; }
+    }
+    toast("Nema prethodnog videa");
+  }
+
+  async function play(url, force, ep) {
+    const my = ++token;
+    const it0 = itemOf(url);
+    ep = it0 && it0.series ? (ep || it0.ep || 1) : 0;
+    if (cur !== url || curEp !== ep) { retriedFor = null; }
+    cur = url; curEp = ep; watchedMarked = false; curRes = null;
+    $("#player").classList.remove("embed");
+    stopPlayback();
+    resetSubs(url);
+    refreshTitle();
+    renderEpisodes();
+    setStatus("Otvaram stranicu i tražim link videa… (do 40 s)", "busy");
+    showOverlay("Otvaram stranicu i tražim link videa…", true);
+    let res;
+    try { api.set_last(url); state.last = url; res = await api.resolve(url, !!force, ep); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    if (my !== token) return;
+    if (!res || !res.ok) {
+      const msg = (res && res.error) || "Nepoznata greška.";
+      setStatus(msg, "err");
+      const btns = [["Pokušaj ponovo", () => play(url, true, ep), true]];
+      if (res && res.candidates) btns.push(["Pravila…", openRules]);
+      btns.push(["Sljedeći", () => goNext(false)], ["Nazad", closePlayer]);
+      showOverlay(msg, false, btns);
+      return;
+    }
+    curRes = res;
+    const it = itemOf(url);
+    if (it && res.episodes) it.eps = res.episodes;
+    refreshTitle();
+    renderEpisodes();
+    load(res, url, my);
+  }
+
+  function fail(msg, url, my) {
+    if (my !== token) return;
+    if (retriedFor !== url) {
+      retriedFor = url;
+      setStatus("Link ne radi (" + msg + "), tražim svjež…", "busy");
+      play(url, true, curEp);
+      return;
+    }
+    setStatus(msg, "err");
+    showOverlay(msg, false, [["Ponovo traži link", () => play(url, true, curEp), true], ["Sljedeći", () => goNext(false)], ["Nazad", closePlayer]]);
+  }
+
+  function load(res, url, my) {
+    if (res.kind === "embed") {
+      $("#player").classList.add("embed"); showBar();
+      video.style.display = "none"; frame.style.display = "block";
+      frame.removeAttribute("sandbox");
+      if (autoSubs !== "off") toast("Auto titl ne radi u ugrađenom okviru. Uključi „Izvuci stream (titlovi)“.");
+      frame.src = res.src;
+      hideOverlay();
+      setStatus("Ugrađeni player" + (res.note ? " (pravi stream nije uhvaćen: " + res.note + ")" : "") + ". Automatski prelazak, blokator i titlovi ne rade u ovom načinu.", "ok");
+      return;
+    }
+    video.style.display = "block"; frame.style.display = "none";
+    if (res.kind === "dash") { fail("DASH (.mpd) format nije podržan u playeru.", url, my); return; }
+    if (res.kind === "hls") {
+      if (window.Hls && Hls.isSupported()) {
+        hls = new Hls({ maxBufferLength: 60 });
+        hls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) fail("HLS greška: " + d.details, url, my); });
+        hls.loadSource(res.src); hls.attachMedia(video);
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = res.src;
+      } else { fail("HLS nije podržan (hls.js se nije učitao).", url, my); return; }
+    } else {
+      video.src = res.src;
+    }
+    video.play().catch(() => {});
+    const key = subKey();
+    loadCachedSubs(key).then(() => autoSubtitles(key));
+  }
+
+  video.addEventListener("playing", () => { hideOverlay(); setStatus("Pušta se", "ok"); scheduleIdle(); });
+  video.addEventListener("pause", showBar);
+  video.addEventListener("error", () => {
+    if (!cur || !video.getAttribute("src")) return;
+    const c = video.error ? video.error.code : 0;
+    fail("Greška videa (kod " + c + ")", cur, token);
+  });
+  video.addEventListener("timeupdate", () => {
+    if (!watchedMarked && video.duration > 60 && video.currentTime / video.duration > 0.9) markWatched();
+  });
+  video.addEventListener("ended", () => {
+    markWatched();
+    if (state.options.autoplay) goNext(true);
+  });
+  video.addEventListener("dblclick", () => setFs(!fsOn));
+  function markWatched() {
+    if (watchedMarked || !cur) return;
+    watchedMarked = true;
+    const it = itemOf(cur);
+    if (it && it.series && curEp) {
+      it.done = [...new Set([...(it.done || []), curEp])].sort((a, b) => a - b);
+      if (it.eps && it.done.length >= it.eps) it.watched = true;
+      renderEpisodes();
+    } else if (it) it.watched = true;
+    catalogDirty = true;
+    api.mark_watched(cur, curEp);
+  }
+
+  // traka iznad videa se sama sakrije; pojavi se na pokret miša / tipku
+  let idleTimer = null;
+  function showBar() {
+    const p = $("#player"); p.classList.remove("idle");
+    clearTimeout(idleTimer);
+    scheduleIdle();
+  }
+  function scheduleIdle() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      const p = $("#player");
+      if (!p.classList.contains("show") || p.classList.contains("embed") || video.paused ||
+          $("#overlay").classList.contains("show") || $("#more").classList.contains("show") ||
+          document.querySelector(".modalbox.show")) return;
+      if ($("#ptop").contains(document.activeElement)) document.activeElement.blur();
+      p.classList.add("idle");
+    }, 3000);
+  }
+  ["mousemove", "mousedown", "touchstart"].forEach((ev) => $("#player").addEventListener(ev, showBar, { passive: true }));
+
+  // ---------------- dugmad ----------------
+  $("#btnLoad").onclick = async () => {
+    const st = await api.choose_file();
+    if (st) { state.version = 0; applyState(st); }
+  };
+  $("#btnRefresh").onclick = async () => applyState(await api.refresh());
+  $("#btnPrev").onclick = goPrev;
+  $("#btnNext").onclick = () => goNext(false);
+  $("#btnRetry").onclick = () => { if (cur) play(cur, true, curEp); };
+  $("#btnFs").onclick = () => setFs(!fsOn);
+  $("#btnMore").onclick = () => $("#more").classList.toggle("show");
+  $("#btnCopy").onclick = async () => {
+    $("#more").classList.remove("show");
+    const t = curRes && curRes.media;
+    if (!t) return toast("Još nema pronađenog linka");
+    try { await navigator.clipboard.writeText(t); toast("Link kopiran"); }
+    catch (e) {
+      const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta);
+      ta.select(); document.execCommand("copy"); ta.remove(); toast("Link kopiran");
+    }
+  };
+  $("#btnExt").onclick = () => {
+    $("#more").classList.remove("show");
+    if (cur) api.open_external(curRes && curRes.kind === "embed" ? curRes.media : cur);
+  };
+  $("#btnPSettings").onclick = () => { $("#more").classList.remove("show"); openSettings(); };
+  $("#optAuto").onchange = (e) => { state.options.autoplay = e.target.checked; api.set_option("autoplay", e.target.checked); };
+  $("#optSkip").onchange = (e) => { state.options.skip_watched = e.target.checked; api.set_option("skip_watched", e.target.checked); };
+  $("#optAd").onchange = (e) => { state.options.adblock = e.target.checked; api.set_option("adblock", e.target.checked); };
+  $("#optExt").onchange = (e) => { state.options.extract_stream = e.target.checked; api.set_option("extract_stream", e.target.checked); };
+  $("#optShow").onchange = (e) => { state.options.show_browser = e.target.checked; api.set_option("show_browser", e.target.checked); };
+
+  $("#tabMovies").onclick = () => setTab("movies");
+  $("#tabSeries").onclick = () => setTab("series");
+  function setTab(t) {
+    ui.tab = t; ui.genre = 0;
+    $("#tabMovies").classList.toggle("on", t === "movies"); $("#tabSeries").classList.toggle("on", t === "series");
+    buildChips(); applyFilters(); window.scrollTo(0, 0);
+  }
+  let searchTimer = null;
+  $("#search").oninput = (e) => { ui.q = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(() => applyFilters(), 200); };
+  $("#selWatch").onchange = (e) => { ui.watch = e.target.value; applyFilters(); };
+  $("#selSort").onchange = (e) => { ui.sort = e.target.value; applyFilters(); };
+
+  // ---------------- postavke i TMDB ----------------
+  async function openSettings() {
+    try { const k = await api.get_tmdb_key(); $("#tmdbKey").value = k.key; $("#tmdbLang").value = k.lang; } catch (e) {}
+    updateMetaStat();
+    $("#setModal").classList.add("show");
+  }
+  async function updateMetaStat() {
+    try {
+      const s = await api.meta_status();
+      $("#metaStat").textContent = !s.enabled ? "TMDB ključ nije upisan." : s.error ? s.error : "Povučeno: " + s.done + " / " + s.total + " naslova";
+    } catch (e) {}
+  }
+  $("#btnSettings").onclick = openSettings;
+  $("#setClose").onclick = () => $("#setModal").classList.remove("show");
+  $("#tmdbSave").onclick = async () => {
+    let r; try { r = await api.set_tmdb_key($("#tmdbKey").value, $("#tmdbLang").value); } catch (e) { r = { ok: false, error: String(e) }; }
+    hasKey = !!$("#tmdbKey").value.trim();
+    toast(r.ok ? (hasKey ? "Ključ radi. Podaci se povlače u pozadini." : "Ključ uklonjen.") : r.error);
+    if (r.ok && hasKey) { wantMeta(shown.slice(0, CHUNK)); }
+    updateMetaStat();
+  };
+  async function pollMeta() {
+    if (!api.meta_since) return;
+    let changed = false;
+    for (let guard = 0; guard < 40; guard++) {
+      let r; try { r = await api.meta_since(metaVer); } catch (e) { return; }
+      if (!r) return;
+      if (r.base) posterBase = r.base;
+      Object.assign(metaMap, r.data); metaVer = r.ver;
+      if (Object.keys(r.data).length) changed = true;
+      if (!r.more) break;
+    }
+    if (changed && !$("#player").classList.contains("show")) {
+      const f = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.key;
+      buildChips();
+      if (ui.genre || ui.sort === "rating" || ui.sort === "year" || ui.sort === "name" || ui.q) applyFilters(true);
+      else refreshCards();
+      if (f) { const el = document.querySelector('.card[data-key="' + CSS.escape(f) + '"]'); if (el) el.focus(); }
+      if ($("#detail").classList.contains("show") && detEntry) { renderDetailStatic(); }
+    } else if (changed) catalogDirty = true;
+  }
+  function refreshCards() {
+    const f = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.key;
+    document.querySelectorAll("#grid .card").forEach((el) => {
+      const e = entryByKey.get(el.dataset.key);
+      if (e && metaMap[e.mk] && !el.dataset.m) { const n = makeCard(e); n.dataset.m = "1"; el.replaceWith(n); }
+    });
+    if (f) { const el = document.querySelector('.card[data-key="' + CSS.escape(f) + '"]'); if (el) el.focus(); }
+  }
+
+  // ---------------- pravila ----------------
+  let previewTimer = null;
+  async function refreshRules(data) {
+    data = data || await api.get_rules();
+    const rl = $("#ruleList"); rl.replaceChildren();
+    if (!data.rules.length) {
+      const h = document.createElement("div"); h.className = "hint"; h.textContent = "Nema pravila: hvata se bilo koji video link."; rl.appendChild(h);
+    }
+    data.rules.forEach((r, i) => {
+      const d = document.createElement("div"); d.className = "rule";
+      const k = document.createElement("span"); k.className = "k"; k.textContent = r.kind === "domain" ? "domena" : "uzorak";
+      const p = document.createElement("span"); p.className = "p"; p.textContent = r.pattern; p.title = r.pattern;
+      const x = document.createElement("button"); x.textContent = "Obriši";
+      x.onclick = async () => refreshRules(await api.delete_rule(i));
+      d.append(k, p, x); rl.appendChild(d);
+    });
+    const cl = $("#candList"); cl.replaceChildren();
+    if (!data.candidates.length) {
+      const h = document.createElement("div"); h.className = "hint"; h.textContent = "Nema."; cl.appendChild(h);
+    }
+    data.candidates.forEach((u) => {
+      const c = document.createElement("div"); c.className = "cand"; c.textContent = u; c.title = "Dvoklik: ubaci kao primjer";
+      c.ondblclick = () => { $("#ruleInput").value = u; previewRule(); };
+      cl.appendChild(c);
+    });
+    $("#selInput").value = data.selectors || "";
+    $("#adInput").value = data.ad_hosts || "";
+    $("#delayInput").value = data.click_delay === undefined ? "6" : String(data.click_delay);
+  }
+  async function previewRule() {
+    const p = await api.preview_rule($("#ruleInput").value);
+    $("#rulePattern").value = p.pattern || "";
+    $("#ruleKind").textContent = !p.kind ? "" : p.kind === "url"
+      ? "Uzorak linka: * zamjenjuje dio koji se mijenja (token, ID...)."
+      : "Domena: prihvata video linkove sa domena koje sadrže ovaj tekst.";
+  }
+  async function openRules() { $("#modal").classList.add("show"); await refreshRules(); }
+  $("#btnRules").onclick = openRules;
+  $("#modalClose").onclick = () => $("#modal").classList.remove("show");
+  $("#modal").onclick = (e) => { if (e.target.id === "modal") $("#modal").classList.remove("show"); };
+  $("#ruleInput").oninput = () => { clearTimeout(previewTimer); previewTimer = setTimeout(previewRule, 200); };
+  $("#ruleAdd").onclick = async () => {
+    const text = $("#rulePattern").value.trim() || $("#ruleInput").value.trim();
+    if (!text) return;
+    await refreshRules(await api.add_rule(text));
+    $("#ruleInput").value = ""; $("#rulePattern").value = ""; $("#ruleKind").textContent = "";
+    toast("Pravilo dodano");
+  };
+  $("#adSave").onclick = async () => { await api.set_ad_hosts($("#adInput").value); toast("Domene spremljene"); };
+  $("#delaySave").onclick = async () => { const ok = await api.set_click_delay($("#delayInput").value); toast(ok ? "Čekanje spremljeno" : "Upiši broj sekundi"); };
+  $("#selSave").onclick = async () => { await api.set_selectors($("#selInput").value); toast("Selektori spremljeni"); };
+
+  // ---------------- titlovi ----------------
+  let subTrack = null, subCues = [], subOffset = 0;
+  function subMsg(t) { $("#subCur").textContent = t; toast(t); }
+  function trackReady() {
+    if (!subTrack) subTrack = video.addTextTrack("subtitles", "Titl", "hr");
+    subTrack.mode = "showing";
+    return subTrack;
+  }
+  function clearCues() {
+    if (!subTrack) return;
+    const cs = subTrack.cues ? Array.from(subTrack.cues) : [];
+    cs.forEach((c) => { try { subTrack.removeCue(c); } catch (e) {} });
+  }
+  function addCues(list) {
+    const t = trackReady();
+    list.forEach((c) => {
+      subCues.push(c);
+      try { t.addCue(new VTTCue(Math.max(0, c.s + subOffset), Math.max(0.01, c.e + subOffset), c.t)); } catch (e) {}
+    });
+  }
+  function rebuildCues() { clearCues(); const keep = subCues; subCues = []; addCues(keep); }
+  function setCues(list, label) {
+    clearCues(); subCues = [];
+    addCues(list);
+    $("#subCur").textContent = "Aktivni titl: " + label + " (" + list.length + " replika)";
+  }
+  function resetSubs() {
+    clearCues(); subCues = [];
+    $("#subCur").textContent = "Nema titla. Titl se prikazuje u playeru (ne radi u ugrađenom okviru).";
+  }
+  let autoSubs = "off";
+  async function autoSubtitles(key) {
+    if (autoSubs !== "online" || key !== subKey() || subCues.length) return;
+    toast("Tražim titl na netu…");
+    let r; try { r = await api.subs_auto_online(key); } catch (e) { r = { ok: false, error: String(e) }; }
+    if (key !== subKey()) return;
+    if (r.ok) { setCues(r.cues, "online (automatski)"); toast("Titl pronađen i učitan"); }
+    else toast("Titl nije nađen: " + r.error);
+  }
+  $("#optAutoSub").onchange = async (e) => {
+    autoSubs = e.target.value;
+    await api.set_subs_settings({ auto_subs: autoSubs });
+    if (autoSubs !== "off" && cur && curRes && curRes.kind !== "embed") autoSubtitles(subKey());
+  };
+  async function loadCachedSubs(key) {
+    try {
+      const c = await api.subs_cached(key);
+      if (c && key === subKey() && !subCues.length) {
+        setCues(c.cues, c.source === "online" ? "online (spremljeno)" : "iz fajla (spremljeno)");
+        toast("Učitani spremljeni titlovi");
+      }
+    } catch (e) {}
+  }
+  function subSettingsFromUi() {
+    return { os_api_key: $("#osKey").value, os_user: $("#osUser").value, os_pass: $("#osPass").value,
+             sub_langs: $("#subLangs").value || "en" };
+  }
+  async function openSubs() {
+    const s = await api.subs_settings();
+    $("#osKey").value = s.os_api_key; $("#osUser").value = s.os_user; $("#osPass").value = s.os_pass;
+    $("#subLangs").value = s.sub_langs;
+    $("#subModal").classList.add("show");
+  }
+  function needPlayer() {
+    if (!cur || !curRes) { subMsg("Prvo pusti video, pa učitaj titl."); return true; }
+    if (curRes.kind === "embed") { subMsg("Titlovi ne rade u ugrađenom okviru."); return true; }
+    return false;
+  }
+  $("#btnSubs").onclick = openSubs;
+  $("#subClose").onclick = () => $("#subModal").classList.remove("show");
+  $("#subModal").onclick = (e) => { if (e.target.id === "subModal") $("#subModal").classList.remove("show"); };
+  $("#subSave").onclick = async () => { await api.set_subs_settings(subSettingsFromUi()); toast("Postavke spremljene"); };
+  $("#subClear").onclick = () => { clearCues(); subCues = []; $("#subCur").textContent = "Titl uklonjen."; };
+  $("#offMinus").onclick = () => { subOffset -= 0.5; $("#offLabel").textContent = subOffset.toFixed(1).replace(".", ",") + " s"; rebuildCues(); };
+  $("#offPlus").onclick = () => { subOffset += 0.5; $("#offLabel").textContent = subOffset.toFixed(1).replace(".", ",") + " s"; rebuildCues(); };
+
+  async function loadSubFile(f) {
+    if (needPlayer()) return;
+    if (f.size > 5e6) return subMsg("Fajl je prevelik za titl.");
+    const buf = new Uint8Array(await f.arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    let r; try { r = await api.subs_upload(subKey(), btoa(bin)); } catch (err) { r = { ok: false, error: String(err) }; }
+    if (r.ok) { setCues(r.cues, "iz fajla"); toast("Titl učitan: " + f.name); } else subMsg(r.error || "Titl nije učitan.");
+  }
+  $("#subFileBtn").onclick = () => $("#subFile").click();
+  $("#subFile").onchange = async (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) await loadSubFile(f); };
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (/\.(srt|vtt|txt|sub)$/i.test(f.name)) await loadSubFile(f); else toast("Povuci .srt ili .vtt fajl");
+  });
+
+  $("#subSearch").onclick = async () => {
+    if (!cur) return subMsg("Prvo odaberi video.");
+    await api.set_subs_settings(subSettingsFromUi());
+    const box = $("#subResults"); box.textContent = "Tražim…";
+    let r; try { r = await api.subs_search(subKey()); } catch (e) { r = { ok: false, error: String(e) }; }
+    box.replaceChildren();
+    if (!r.ok) { const d = document.createElement("div"); d.className = "hint"; d.textContent = r.error; box.appendChild(d); return; }
+    const hd = document.createElement("div"); hd.className = "hint"; hd.textContent = "Upit: " + r.query + " — klikni na titl da ga učitaš";
+    box.appendChild(hd);
+    if (!r.results.length) { const d = document.createElement("div"); d.className = "hint"; d.textContent = "Nema rezultata."; box.appendChild(d); }
+    r.results.forEach((x) => {
+      const d = document.createElement("div"); d.className = "res";
+      const n = document.createElement("span"); n.className = "rn rt"; n.textContent = x.release; n.title = x.release;
+      const m = document.createElement("span"); m.className = "rm"; m.textContent = x.lang + " · " + x.downloads + "↓";
+      d.append(n, m);
+      d.onclick = async () => {
+        if (needPlayer()) return;
+        toast("Preuzimam titl…");
+        let dl; try { dl = await api.subs_download(subKey(), x.file_id); } catch (e) { dl = { ok: false, error: String(e) }; }
+        if (dl.ok) { setCues(dl.cues, "online"); toast("Titl učitan"); } else subMsg(dl.error);
+      };
+      box.appendChild(d);
+    });
+  };
+
+  // ---------------- tipke, strelice (miš, tastatura i daljinski) ----------------
+  function topModal() { const m = document.querySelectorAll(".modalbox.show"); return m.length ? m[m.length - 1] : null; }
+  function closeTop() {
+    const m = topModal();
+    if (m) { m.classList.remove("show"); if (m.id === "detail") detEntry = null; return true; }
+    if ($("#more").classList.contains("show")) { $("#more").classList.remove("show"); return true; }
+    return false;
+  }
+  // Android tipka "nazad": true = obrađeno u sučelju
+  window.__onBack = function () {
+    if (closeTop()) return true;
+    if ($("#player").classList.contains("show")) { closePlayer(); return true; }
+    return false;
+  };
+
+  function visible(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden"; }
+  function spatial(dir) {
+    const m = topModal();
+    const scope = m || ($("#player").classList.contains("show") ? $("#ptop") : $("#catalog"));
+    const sel = "button:not(:disabled), input:not([type=hidden]), select, [tabindex='0']";
+    const act = document.activeElement;
+    const all = [...scope.querySelectorAll(sel)].filter(visible);
+    if (!all.length) return false;
+    if (!act || !scope.contains(act) || act === document.body) { all[0].focus(); return true; }
+    const a = act.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    let best = null, bs = Infinity;
+    all.forEach((el) => {
+      if (el === act) return;
+      const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const dx = x - ax, dy = y - ay;
+      const prim = dir === "ArrowRight" ? dx : dir === "ArrowLeft" ? -dx : dir === "ArrowDown" ? dy : -dy;
+      const sec = dir === "ArrowRight" || dir === "ArrowLeft" ? Math.abs(dy) : Math.abs(dx);
+      if (prim <= 1) return;
+      const s = prim + 2.5 * sec;
+      if (s < bs) { bs = s; best = el; }
+    });
+    if (!best && dir === "ArrowDown" && !m && renderedN < shown.length && $("#catalog").style.display !== "none") { renderMore(); return spatial(dir); }
+    if (best) { best.focus(); best.scrollIntoView({ block: "nearest", inline: "nearest" }); return true; }
+    return false;
+  }
+
+  document.addEventListener("keydown", (e) => {
+    const t = e.target, tag = t.tagName || "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA";
+    if (e.key === "Escape" || e.key === "Backspace" && !typing && tag !== "SELECT") {
+      if (e.key === "Backspace" && !(window.AndroidBridge)) return;
+      if (fsOn && !topModal()) { setFs(false); e.preventDefault(); return; }
+      if (window.__onBack()) e.preventDefault();
+      return;
+    }
+    const inPlayer = $("#player").classList.contains("show") && !topModal();
+    if (inPlayer) {
+      showBar();
+      const inBar = $("#ptop").contains(t);
+      if (!typing && !inBar && curRes && curRes.kind !== "embed") {
+        if (e.key === " " || e.key === "k" || (e.key === "Enter" && tag !== "BUTTON")) { video.paused ? video.play() : video.pause(); e.preventDefault(); return; }
+        if (e.key === "ArrowRight") { video.currentTime += 10; e.preventDefault(); return; }
+        if (e.key === "ArrowLeft") { video.currentTime -= 10; e.preventDefault(); return; }
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") { $("#pBack").focus(); e.preventDefault(); return; }
+      }
+      if (!typing && !e.ctrlKey && !e.altKey) {
+        if (e.key === "f" || e.key === "F") { setFs(!fsOn); e.preventDefault(); return; }
+        if (e.key === "n" || e.key === "N") { goNext(false); return; }
+        if (e.key === "p" || e.key === "P") { goPrev(); return; }
+        if (e.key === "m" || e.key === "M") { video.muted = !video.muted; return; }
+      }
+    }
+    if (/^Arrow/.test(e.key) && tag !== "SELECT" && !(typing && /Left|Right/.test(e.key)) && !e.altKey) {
+      if (spatial(e.key)) e.preventDefault();
+      else if (inPlayer && e.key === "ArrowDown") { document.activeElement.blur(); }
+    }
+  });
+
+  // ---------------- pokretanje ----------------
+  let started = false;
+  async function start() {
+    if (started) return; started = true;
+    api = window.pywebview.api;
+    try {
+      const mi = await api.meta_init();
+      genreNames = Object.fromEntries(Object.entries(mi.genres).map(([k, v]) => [Number(k), v]));
+      hasKey = !!mi.has_key; if (mi.base) posterBase = mi.base;
+    } catch (e) {}
+    applyState(await api.init());
+    try { autoSubs = (await api.subs_settings()).auto_subs || "off"; if (autoSubs !== "off") autoSubs = "online"; $("#optAutoSub").value = autoSubs; } catch (e) {}
+    pollMeta();
+    let tick = 0;
+    setInterval(async () => {
+      try { const st = await api.poll(state.version); if (st && st.items) applyState(st); } catch (e) {}
+      try { const n = await api.blocked_count(); $("#blk").textContent = n ? "Blokirano pop-up prozora: " + n : ""; } catch (e) {}
+      if (++tick % 2 === 0) pollMeta();
+      if ($("#setModal").classList.contains("show")) updateMetaStat();
+    }, 3000);
+  }
+  window.addEventListener("pywebviewready", start);
+  if (window.pywebview && window.pywebview.api) start();
+
+  // hls.js: lokalna kopija, a ako je nema, CDN
+  (function loadHls() {
+    const s = document.createElement("script");
+    s.src = "vendor/hls.min.js";
+    s.onerror = () => { const c = document.createElement("script"); c.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"; document.head.appendChild(c); };
+    document.head.appendChild(s);
+  })();
+})();
+</script>
+</body>
+</html>
